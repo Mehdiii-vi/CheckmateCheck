@@ -110,5 +110,21 @@ class TestChessEvaluator(unittest.TestCase):
         self.assertEqual(result["status"], "INVALID")
 
 
+    def test_moves_by_square_contains_both_colors(self):
+        """moves_by_square should contain legal moves for both White and Black pieces."""
+        board = Board()
+        board.setup_initial()
+        result = evaluate_board(board, 'w')
+        self.assertIn("moves_by_square", result)
+        # White pawn at e2 has moves e3, e4
+        self.assertIn("e2", result["moves_by_square"])
+        self.assertIn("e3", result["moves_by_square"]["e2"])
+        self.assertIn("e4", result["moves_by_square"]["e2"])
+        # Black pawn at e7 has moves e6, e5
+        self.assertIn("e7", result["moves_by_square"])
+        self.assertIn("e6", result["moves_by_square"]["e7"])
+        self.assertIn("e5", result["moves_by_square"]["e7"])
+
+
 if __name__ == '__main__':
     unittest.main()

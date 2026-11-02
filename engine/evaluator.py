@@ -1,7 +1,8 @@
 """
 High-level chess board evaluator for Checkmate, Stalemate, Check, Normal, and Invalid states.
+Computes comprehensive legal moves for both colors to support interactive move preview.
 """
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List, Optional, Tuple
 from .board import Board, coords_to_square
 from .move_gen import is_in_check, get_attackers_of_square, generate_legal_moves
 
@@ -16,7 +17,6 @@ def validate_board(board: Board, active_turn: str) -> Tuple[bool, str, str]:
 
     Returns: (is_valid, error_fa, error_en)
     """
-    from typing import Tuple
     active_turn = active_turn.lower()
     opponent = 'b' if active_turn == 'w' else 'w'
 
@@ -51,7 +51,7 @@ def validate_board(board: Board, active_turn: str) -> Tuple[bool, str, str]:
     if is_in_check(board, opponent):
         opp_name_fa = "سیاه" if opponent == 'b' else "سفید"
         opp_name_en = "Black" if opponent == 'b' else "White"
-        return False, f"شاه بازیکن غیرنوبت ({opp_name_fa}) در کیش است؛ این وضعیت در شطرنج غیرممکن است زیرا حرکت قبلی غیرقانونی بوده است.", f"The inactive player's king ({opp_name_en}) is in check, which is an illegal board state."
+        return False, f"شاه بازیکن غیرنوبت ({opp_name_fa}) در کیش است؛ این وضعیت در شطرنج نامعتبر است.", f"The inactive player's king ({opp_name_en}) is in check, which is an illegal board state."
 
     return True, "", ""
 
@@ -60,14 +60,11 @@ def evaluate_board(board: Board, active_turn: str = 'w') -> Dict[str, Any]:
     """
     Evaluate chess board position for active_turn ('w' or 'b').
     Determines if position is CHECKMATE, STALEMATE, CHECK, NORMAL, or INVALID.
+    Also computes moves_by_square for all pieces (both colors) to allow move previews on click.
     """
     active_turn = active_turn.lower()
     if active_turn not in ('w', 'b'):
         active_turn = 'w'
-
-    player_name_fa = "سفید" if active_turn == 'w' else "سیاه"
-    player_name_en = "White" if active_turn == 'w' else "Black"
-    opponent_turn = 'b' if active_turn == 'w' else 'w'
 
     # Step 1: Validate board
     is_valid, error_fa, error_en = validate_board(board, active_turn)
@@ -78,19 +75,23 @@ def evaluate_board(board: Board, active_turn: str = 'w') -> Dict[str, Any]:
             "status_color": "danger",
             "active_turn": active_turn,
             "in_check": False,
-            "checking_pieces": [],
+            "king_coords": None,
             "king_square": None,
+            "checking_pieces": [],
             "legal_moves_count": 0,
             "legal_moves": [],
+            "moves_by_square": {},
             "explanation_fa": error_fa,
-            "explanation_en": error_en
+            "explanation_en": error_en,
+            "message_fa": error_fa
         }
 
     king_pos = board.find_king(active_turn)
     king_square = coords_to_square(king_pos[0], king_pos[1]) if king_pos else None
 
-    # Step 2: Check status
+    # Step 2: Check status for active player
     in_check = is_in_check(board, active_turn)
+    opponent_turn = 'b' if active_turn == 'w' else 'w'
     checking_pieces_coords = get_attackers_of_square(board, king_pos[0], king_pos[1], opponent_turn) if king_pos else []
     checking_pieces = [
         {
@@ -101,81 +102,57 @@ def evaluate_board(board: Board, active_turn: str = 'w') -> Dict[str, Any]:
         for r, c in checking_pieces_coords
     ]
 
-    # Step 3: Legal moves calculation
-    legal_moves = generate_legal_moves(board, active_turn)
-    legal_moves_count = len(legal_moves)
-    legal_moves_dicts = [m.to_dict() for m in legal_moves]
+    # Step 3: Compute legal moves for active player
+    active_legal_moves = generate_legal_moves(board, active_turn)
+    legal_moves_count = len(active_legal_moves)
+    legal_moves_dicts = [m.to_dict() for m in active_legal_moves]
 
-    # Step 4: Outcome resolution
+    # Step 4: Compute legal moves for both sides for interactive click preview
+    opp_legal_moves = generate_legal_moves(board, opponent_turn)
+    moves_by_square: Dict[str, List[str]] = {}
+
+    for m in active_legal_moves + opp_legal_moves:
+        if m.from_sq not in moves_by_square:
+            moves_by_square[m.from_sq] = []
+        if m.to_sq not in moves_by_square[m.from_sq]:
+            moves_by_square[m.from_sq].append(m.to_sq)
+
+    # Step 5: Outcome resolution
     if legal_moves_count == 0:
         if in_check:
-            # CHECKMATE
             status = "CHECKMATE"
             status_fa = "کیش و مات"
             status_color = "danger"
-            check_sources = ", ".join([cp["square"] for cp in checking_pieces])
-            exp_fa = (
-                f"شاه {player_name_fa} در خانه‌ی {king_square} توسط مهره‌های خانه‌های ({check_sources}) "
-                f"در کیش است و بازیکن هیچ حرکت قانونی برای رفع کیش ندارد. {player_name_fa} کیش و مات شده است!"
-            )
-            exp_en = (
-                f"{player_name_en} King on {king_square} is in check by ({check_sources}) "
-                f"and has no legal moves to escape. {player_name_en} is checkmated!"
-            )
+            message_fa = "کیش و مات! شاه هیچ حرکت قانونی برای رفع کیش ندارد."
         else:
-            # STALEMATE
             status = "STALEMATE"
             status_fa = "پات (مساوی)"
             status_color = "warning"
-            exp_fa = (
-                f"شاه {player_name_fa} در کیش نیست، اما هیچ حرکت قانونی برای بازیکن {player_name_fa} "
-                f"روی کل صفحه وجود ندارد. بازی مساوی (پات) است."
-            )
-            exp_en = (
-                f"{player_name_en} King is NOT in check, but {player_name_en} has no legal moves remaining. "
-                f"The game is a draw by stalemate."
-            )
+            message_fa = "پات! شاه در کیش نیست اما هیچ حرکت قانونی وجود ندارد."
     else:
         if in_check:
-            # CHECK
             status = "CHECK"
             status_fa = "کیش"
             status_color = "warning"
-            check_sources = ", ".join([cp["square"] for cp in checking_pieces])
-            exp_fa = (
-                f"شاه {player_name_fa} در خانه‌ی {king_square} از طرف خانه ({check_sources}) کیش شده است. "
-                f"بازیکن {legal_moves_count} حرکت قانونی برای خروج از کیش در اختیار دارد."
-            )
-            exp_en = (
-                f"{player_name_en} King on {king_square} is in check from ({check_sources}). "
-                f"{player_name_en} has {legal_moves_count} legal move(s) to escape check."
-            )
+            message_fa = "کیش! شاه در معرض خطر است اما راه‌های خروج وجود دارد."
         else:
-            # NORMAL
             status = "NORMAL"
             status_fa = "وضعیت عادی"
             status_color = "success"
-            exp_fa = (
-                f"شاه {player_name_fa} در امنیت است و کیش نیست. "
-                f"بازیکن {player_name_fa} دارای {legal_moves_count} حرکت قانونی است."
-            )
-            exp_en = (
-                f"{player_name_en} is not in check. {player_name_en} has {legal_moves_count} legal move(s) available."
-            )
+            message_fa = "وضعیت عادی (بدون کیش)"
 
     return {
         "status": status,
         "status_fa": status_fa,
-        "status_en": status,
         "status_color": status_color,
         "active_turn": active_turn,
         "in_check": in_check,
-        "king_square": king_square,
         "king_coords": king_pos,
+        "king_square": king_square,
         "checking_pieces": checking_pieces,
         "legal_moves_count": legal_moves_count,
         "legal_moves": legal_moves_dicts,
-        "explanation_fa": exp_fa,
-        "explanation_en": exp_en,
+        "moves_by_square": moves_by_square,
+        "message_fa": message_fa,
         "fen": board.to_fen(active_turn)
     }
