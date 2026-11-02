@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>تشخیص کیش و مات و پات شطرنج | CheckmateCheck</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+</head>
+<body>
+  <div class="app-container">
+    <!-- Header -->
+    <header class="app-header">
+      <div class="header-content">
+        <div class="logo-area">
+          <span class="logo-icon">♟️</span>
+          <div>
+            <h1>الگوریتم تشخیص کیش و مات و پات شطرنج</h1>
+            <p class="subtitle">تحلیل دقیق وضعیت صفحه، محاسبه کیش، پات، کیش‌ومات و حرکات قانونی</p>
+          </div>
+        </div>
+        <div class="engine-badge">
+          <span class="badge-dot"></span>
+          <span id="engineStatusText">موتور فعال</span>
+        </div>
+      </div>
+    </header>
+
+    <!-- Main Workspace -->
+    <main class="main-content">
+      
+      <!-- Left Side: Chessboard & Direct Controls -->
+      <section class="board-section">
+        <div class="board-card">
+          <div class="board-header">
+            <div class="turn-indicator" id="turnIndicator">
+              <span class="turn-dot white-turn"></span>
+              <span class="turn-text">نوبت حرکت: <strong>سفید</strong></span>
+            </div>
+            <div class="quick-tools">
+              <button class="btn btn-sm btn-outline" id="btnFlipBoard" title="چرخش صفحه">🔄 چرخش</button>
+              <button class="btn btn-sm btn-outline" id="btnResetBoard" title="چینش اولیه">🏁 شروع</button>
+              <button class="btn btn-sm btn-danger-outline" id="btnClearBoard" title="خالی کردن صفحه">🧹 پاکسازی</button>
+            </div>
+          </div>
+
+          <!-- 8x8 Chessboard Container with Coordinates -->
+          <div class="chessboard-wrapper">
+            <div class="board-coordinates-ranks left-ranks" id="leftRanks"></div>
+            <div class="chessboard" id="chessboard">
+              <!-- 64 squares generated via JavaScript -->
+            </div>
+            <div class="board-coordinates-ranks right-ranks" id="rightRanks"></div>
+          </div>
+          <div class="board-coordinates-files" id="bottomFiles"></div>
+
+          <!-- Board interaction hint -->
+          <div class="board-hint">
+            <span>💡 <strong>راهنما:</strong> مهره‌ها را از پالت انتخاب کنید و روی خانه مورد نظر کلیک نمایید، یا مهره‌ها را با ماوس بکشید و رها کنید (Drag & Drop). برای حذف مهره، کلیک راست کنید یا از ابزار سطل زباله استفاده کنید.</span>
+          </div>
+        </div>
+
+        <!-- FEN Input/Output Card -->
+        <div class="card fen-card">
+          <div class="fen-header">
+            <label for="fenInput"><strong>رشته استاندارد FEN:</strong></label>
+            <button class="btn btn-xs btn-outline" id="btnCopyFen">📋 کپی</button>
+          </div>
+          <div class="fen-input-group">
+            <input type="text" id="fenInput" class="fen-input" placeholder="مثال: rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1" spellcheck="false" dir="ltr">
+            <button class="btn btn-primary" id="btnLoadFen">بارگذاری</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- Right Side: Palette, Evaluation & Presets -->
+      <section class="sidebar-section">
+
+        <!-- Result / Analysis Card (Most Important) -->
+        <div class="card result-card" id="resultCard">
+          <div class="result-header">
+            <h3>نتیجه تحلیل الگوریتم</h3>
+            <span class="status-badge" id="statusBadge">در حال بررسی...</span>
+          </div>
+
+          <div class="result-body">
+            <div class="explanation-box" id="explanationFa">
+              برای مشاهده تحلیل، مهره‌ها را روی صفحه بچینید.
+            </div>
+
+            <div class="stats-grid">
+              <div class="stat-item">
+                <span class="stat-label">وضعیت کیش:</span>
+                <span class="stat-value" id="statInCheck">-</span>
+              </div>
+              <div class="stat-item">
+                <span class="stat-label">تعداد حرکات قانونی:</span>
+                <span class="stat-value" id="statLegalMoves">-</span>
+              </div>
+              <div class="stat-item">
+                <span class="stat-label">موقعیت شاه:</span>
+                <span class="stat-value" id="statKingSquare" dir="ltr">-</span>
+              </div>
+              <div class="stat-item">
+                <span class="stat-label">مهره‌های کیش‌دهنده:</span>
+                <span class="stat-value" id="statCheckingPieces" dir="ltr">-</span>
+              </div>
+            </div>
+
+            <!-- Legal moves list collapsible -->
+            <details class="legal-moves-details" id="legalMovesDetails">
+              <summary>مشاهده فهرست حرکات قانونی (<span id="legalMovesCount">۰</span> حرکت)</summary>
+              <div class="legal-moves-tags" id="legalMovesTags" dir="ltr">
+                <!-- Move badges inserted by JS -->
+              </div>
+            </details>
+          </div>
+        </div>
+
+        <!-- Piece Palette & Tools -->
+        <div class="card palette-card">
+          <h3>پالت مهره‌ها (انتخاب جهت قرار دادن در صفحه)</h3>
+          
+          <div class="palette-group">
+            <span class="palette-label">مهره‌های سفید:</span>
+            <div class="palette-pieces" id="whitePalette">
+              <button class="palette-btn" data-piece="wK" title="شاه سفید (White King)">♔</button>
+              <button class="palette-btn" data-piece="wQ" title="وزیر سفید (White Queen)">♕</button>
+              <button class="palette-btn" data-piece="wR" title="رخ سفید (White Rook)">♖</button>
+              <button class="palette-btn" data-piece="wB" title="فیل سفید (White Bishop)">♗</button>
+              <button class="palette-btn" data-piece="wN" title="اسب سفید (White Knight)">♘</button>
+              <button class="palette-btn" data-piece="wP" title="پیاده سفید (White Pawn)">♙</button>
+            </div>
+          </div>
+
+          <div class="palette-group">
+            <span class="palette-label">مهره‌های سیاه:</span>
+            <div class="palette-pieces" id="blackPalette">
+              <button class="palette-btn" data-piece="bK" title="شاه سیاه (Black King)">♚</button>
+              <button class="palette-btn" data-piece="bQ" title="وزیر سیاه (Black Queen)">♛</button>
+              <button class="palette-btn" data-piece="bR" title="رخ سیاه (Black Rook)">♜</button>
+              <button class="palette-btn" data-piece="bB" title="فیل سیاه (Black Bishop)">♝</button>
+              <button class="palette-btn" data-piece="bN" title="اسب سیاه (Black Knight)">♞</button>
+              <button class="palette-btn" data-piece="bP" title="پیاده سیاه (Black Pawn)">♟</button>
+            </div>
+          </div>
+
+          <div class="palette-group tools-row">
+            <button class="tool-btn" id="toolErase" data-tool="erase" title="ابزار پاک‌کن / حذف مهره">
+              🗑️ ابزار حذف مهره (پاک‌کن)
+            </button>
+            <button class="tool-btn active" id="toolPointer" data-tool="pointer" title="حالت جابجایی مهره">
+              ✋ جابجایی / انتخاب
+            </button>
+          </div>
+
+          <div class="turn-selection-box">
+            <span><strong>نوبت حرکت کیست؟</strong></span>
+            <div class="turn-btn-group">
+              <button class="turn-btn active" id="btnTurnWhite" data-turn="w">⚪ نوبت سفید</button>
+              <button class="turn-btn" id="btnTurnBlack" data-turn="b">⚫ نوبت سیاه</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Preset Scenarios (Ready-made positions) -->
+        <div class="card presets-card">
+          <h3>آزمون سناریوهای مشهور و آماده</h3>
+          <p class="presets-desc">برای تست فوری الگوریتم، یکی از سناریوهای زیر را انتخاب کنید:</p>
+          
+          <div class="presets-grid">
+            <button class="preset-btn" data-preset="foolsMate">
+              <span class="preset-badge badge-mate">مات</span>
+              <span class="preset-title">مات مبتدیان (Fool's Mate)</span>
+              <span class="preset-sub">نوبت سفید • ۲ حرکت</span>
+            </button>
+
+            <button class="preset-btn" data-preset="scholarsMate">
+              <span class="preset-badge badge-mate">مات</span>
+              <span class="preset-title">مات ناپلئونی (Scholar's Mate)</span>
+              <span class="preset-sub">نوبت سیاه • وزیر و فیل در f7</span>
+            </button>
+
+            <button class="preset-btn" data-preset="smotheredMate">
+              <span class="preset-badge badge-mate">مات</span>
+              <span class="preset-title">مات خفه‌کننده با اسب</span>
+              <span class="preset-sub">نوبت سیاه • محاصره شاه توسط مهره‌های خودی</span>
+            </button>
+
+            <button class="preset-btn" data-preset="backRankMate">
+              <span class="preset-badge badge-mate">مات</span>
+              <span class="preset-title">مات عرض آخر (Back-Rank)</span>
+              <span class="preset-sub">نوبت سیاه • رخ در d8</span>
+            </button>
+
+            <button class="preset-btn" data-preset="queenStalemate">
+              <span class="preset-badge badge-stalemate">پات</span>
+              <span class="preset-title">پات کلاسیک وزیر در گوشه</span>
+              <span class="preset-sub">نوبت سیاه • بدون کیش و بدون حرکت</span>
+            </button>
+
+            <button class="preset-btn" data-preset="pawnLockStalemate">
+              <span class="preset-badge badge-stalemate">پات</span>
+              <span class="preset-title">پات شاه و پیاده در گوشه</span>
+              <span class="preset-sub">نوبت سیاه • بن‌بست کامل پیاده</span>
+            </button>
+
+            <button class="preset-btn" data-preset="checkEscape">
+              <span class="preset-badge badge-check">کیش</span>
+              <span class="preset-title">کیش با امکان دفاع و فرار</span>
+              <span class="preset-sub">نوبت سفید • امکان دفاع با پیاده g3</span>
+            </button>
+
+            <button class="preset-btn" data-preset="initial">
+              <span class="preset-badge badge-normal">عادی</span>
+              <span class="preset-title">وضعیت شروع استاندارد</span>
+              <span class="preset-sub">نوبت سفید • ۲۰ حرکت قانونی</span>
+            </button>
+          </div>
+        </div>
+
+      </section>
+    </main>
+
+    <!-- Educational Footer: Explaining the Algorithm -->
+    <footer class="app-footer">
+      <div class="footer-box">
+        <h3>منطق و گام‌های الگوریتم ارزیابی (چگونه کیش و مات یا پات تشخیص داده می‌شود؟)</h3>
+        <div class="algorithm-steps">
+          <div class="step-card">
+            <span class="step-num">۱</span>
+            <h4>اعتبارسنجی فیزیکی</h4>
+            <p>بررسی وجود دقیقاً یک شاه برای هر طرف، عدم همجواری شاه‌ها، نبود پیاده در ردیف ۱ و ۸، و کیش نبودن شاه حریف در نوبت بازیکن جاری.</p>
+          </div>
+          <div class="step-card">
+            <span class="step-num">۲</span>
+            <h4>تشخیص کیش (In-Check)</h4>
+            <p>یافتن موقعیت شاه بازیکن صاحب نوبت و بررسی پرتوهای حمله مهره‌های حریف (خطوط رخ، قطر‌های فیل/وزیر، L اسب، و ضربدری پیاده).</p>
+          </div>
+          <div class="step-card">
+            <span class="step-num">۳</span>
+            <h4>تولید حرکات قانونی (Legal Moves)</h4>
+            <p>تولید کلیه حرکات شبه‌قانونی، شبیه‌سازی فرضی هر حرکت روی صفحه، و فیلتر کردن تنها حرکاتی که پس از آنها شاه خودی در کیش باقی نمی‌ماند.</p>
+          </div>
+          <div class="step-card">
+            <span class="step-num">۴</span>
+            <h4>تصمیم‌گیری نهایی</h4>
+            <p>اگر تعداد حرکات قانونی صفر باشد: کیش $\rightarrow$ <strong>کیش و مات</strong> | بدون کیش $\rightarrow$ <strong>پات</strong>. در غیر این صورت: <strong>کیش</strong> یا <strong>عادی</strong>.</p>
+          </div>
+        </div>
+      </div>
+    </footer>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
